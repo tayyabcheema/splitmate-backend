@@ -8,7 +8,8 @@ const {
   joinGroupByInvite,
   getGroupExpenses,
   exportGroupExpensesCSV,
-  leaveGroup
+  leaveGroup,
+  getAllGroups
 } = require("../controller/groupController");
 const verifyToken = require("../middleware/authMiddleware");
 
@@ -16,6 +17,8 @@ const verifyToken = require("../middleware/authMiddleware");
 router.use(verifyToken);
 
 router.post("/create", createGroup);
+
+router.get("/all", getAllGroups);
 
 router.put("/update/:id", updateGroup);
 

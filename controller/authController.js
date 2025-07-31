@@ -47,7 +47,7 @@ const login = async (req, res, next) => {
       expiresIn: "1h",
     });
 
-    return next(createSuccess(200, "Login successful", { token }));
+    return next(createSuccess(200, "Login successful", {token} ));
   } catch (err) {
     return next(createError(500, err.message));
   }

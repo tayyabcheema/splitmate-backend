@@ -8,6 +8,7 @@ const Settlement = require("../models/Settlement");
 const { Parser } = require("json2csv");
 const logActivity = require("../utils/logActivity");
 const notifyUser = require("../utils/notifyUser");
+const User = require("../models/User")
 
 const createGroup = async (req, res, next) => {
   try {
@@ -30,6 +31,29 @@ const createGroup = async (req, res, next) => {
     return next(createError(500, err.message));
   }
 };
+
+const getAllGroups = async (req, res, next) => {
+  try {
+    const userId = req.user._id || req.user.id;
+    const user = await User.findById(userId);
+    if (!user) {
+      return next(createError(404, "User not found"));
+    }
+
+    const groups = await Group.find({
+      $or: [
+        { createdBy: userId },
+        { "members.user": userId },
+      ],
+    }).populate("createdBy", "name email")
+      .populate("members.user", "name email");
+
+    return next(successResponse(200, "Groups fetched successfully", groups));
+  } catch (err) {
+    return next(createError(500, err.message));
+  }
+};
+
 
 const updateGroup = async (req, res, next) => {
   try {
@@ -431,4 +455,5 @@ module.exports = {
   getGroupExpenses,
   exportGroupExpensesCSV,
   leaveGroup,
+  getAllGroups
 };
