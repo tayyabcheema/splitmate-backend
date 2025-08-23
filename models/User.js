@@ -16,10 +16,13 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    resetPasswordToken: { type: String },
+    resetPasswordExpire: { type: Date }, // ✅ missing field added
   },
   { timestamps: true }
 );
 
+// Hash password before save
 userSchema.pre("save", async function (next) {
   if (this.isModified("password")) {
     this.password = await bcrypt.hash(this.password, 10);
@@ -27,6 +30,7 @@ userSchema.pre("save", async function (next) {
   next();
 });
 
+// Compare passwords
 userSchema.methods.comparePassword = async function (password) {
   return await bcrypt.compare(password, this.password);
 };
