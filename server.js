@@ -23,7 +23,7 @@ corsOptions = {
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   credentials: true,
   optionsSuccessStatus: 204,
-}
+};
 
 // Middleware
 app.use(express.json());
@@ -32,7 +32,9 @@ app.use(cors());
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/groups", groupRoutes);
-app.use("/api/expenses", expenseRoutes);
+// app.use("/api/expenses", expenseRoutes);
+app.use("/api", expenseRoutes);
+
 app.use("/api/settlements", settlementRoutes);
 app.use("/api/activities", activityRoutes);
 app.use("/api/personal-expenses", personalExpenseRoutes);

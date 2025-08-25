@@ -31,6 +31,11 @@ const personalExpenseSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    method: {
+      type: String,
+      enum: ["Credit Card", "Debit Card", "Cash", "PayPal", "Other"],
+      required: true,
+    },
   },
   { timestamps: true }
 );

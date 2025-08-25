@@ -5,9 +5,10 @@ const { Parser } = require("json2csv");
 
 const addPersonalExpense = async (req, res, next) => {
   try {
-    const { amount, description, category, notes, currency, date } = req.body;
+    const { amount, description, category, notes, currency, date, method } =
+      req.body;
 
-    if (!amount || !description || !category) {
+    if (!amount || !description || !category || !method) {
       return next(
         createError(400, "Amount, description, and category are required")
       );
@@ -21,6 +22,7 @@ const addPersonalExpense = async (req, res, next) => {
       notes,
       currency,
       date,
+      method,
     });
 
     return next(
@@ -113,6 +115,7 @@ const exportPersonalExpensesCSV = async (req, res, next) => {
       { label: "Category", value: "category" },
       { label: "Description", value: "description" },
       { label: "Currency", value: "currency" },
+      { label: "Method", value: "method" },
     ];
 
     const parser = new Parser({ fields });
@@ -131,5 +134,5 @@ module.exports = {
   getPersonalExpenses,
   updatePersonalExpense,
   deletePersonalExpense,
-  exportPersonalExpensesCSV
+  exportPersonalExpensesCSV,
 };

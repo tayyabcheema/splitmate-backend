@@ -8,27 +8,85 @@ const Settlement = require("../models/Settlement");
 const { Parser } = require("json2csv");
 const logActivity = require("../utils/logActivity");
 const notifyUser = require("../utils/notifyUser");
-const User = require("../models/User")
+const User = require("../models/User");
 
 const createGroup = async (req, res, next) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, members = [] } = req.body;
+
     if (!name) {
       return next(createError(400, "Group name is required"));
     }
+
     const group = await Group.findOne({ name, createdBy: req.user._id });
     if (group) {
       return next(createError(400, "Group already exists"));
     }
+
+    const validUsers = await User.find({ email: { $in: members } });
+    const invalidEmails = members.filter(
+      (email) => !validUsers.some((u) => u.email === email)
+    );
+
+    if (invalidEmails.length > 0) {
+      return next(
+        createError(400, `Invalid member emails: ${invalidEmails.join(", ")}`)
+      );
+    }
+
+    const groupMembers = validUsers.map((user) => ({
+      user: user._id,
+      role: "member",
+    }));
+
+    groupMembers.push({ user: req.user._id, role: "admin" });
+
     const newGroup = await Group.create({
       name,
       description,
       createdBy: req.user._id,
-      members: [{ user: req.user._id, role: "admin" }],
+      members: groupMembers,
     });
-    return next(successResponse(201, "Group created successfully", newGroup));
+
+    return next(
+      successResponse(201, "Group created successfully", { group: newGroup })
+    );
   } catch (err) {
     return next(createError(500, err.message));
+  }
+};
+
+const checkUserByEmail = async (req, res, next) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return next(createError(400, "Email is required"));
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return next(createError(404, "User not found"));
+    }
+
+    return next(successResponse(200, "User exists", { email }));
+  } catch (err) {
+    return next(createError(500, err.message));
+  }
+};
+
+const deleteGroupById = async (req, res, next) => {
+  try {
+    const groupId = req.params.id;
+    const group = await Group.findByIdAndDelete(groupId);
+
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    res.json({ message: "Group deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting group:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -41,11 +99,9 @@ const getAllGroups = async (req, res, next) => {
     }
 
     const groups = await Group.find({
-      $or: [
-        { createdBy: userId },
-        { "members.user": userId },
-      ],
-    }).populate("createdBy", "name email")
+      $or: [{ createdBy: userId }, { "members.user": userId }],
+    })
+      .populate("createdBy", "name email")
       .populate("members.user", "name email");
 
     return next(successResponse(200, "Groups fetched successfully", groups));
@@ -54,6 +110,19 @@ const getAllGroups = async (req, res, next) => {
   }
 };
 
+const getGroupDetiailById = async (req, res, next) => {
+  try {
+    const group = await Group.findById(req.params.id).populate(
+      "members.user",
+      "name email"
+    );
+    if (!group) return next(createError(404, "Group not found"));
+
+    return next(successResponse(200, "Group fetched successfully", group));
+  } catch (err) {
+    return next(createError(500, err.message));
+  }
+};
 
 const updateGroup = async (req, res, next) => {
   try {
@@ -178,40 +247,77 @@ const getGroupBalances = async (req, res, next) => {
   }
 };
 
-const generateGroupInvite = async (req, res, next) => {
+// Get user's total balances across all groups
+const getUserTotalBalance = async (req, res, next) => {
   try {
-    const groupId = req.params.id;
+    const userId = req.user._id.toString();
 
-    const group = await Group.findById(groupId);
-    if (!group) {
-      return next(createError(404, "Group not found"));
-    }
+    // Fetch all groups where user is a member
+    const groups = await Group.find({ "members.user": userId });
 
-    if (group.createdBy.toString() !== req.user._id.toString()) {
-      return next(
-        createError(
-          403,
-          "You are not authorized to generate invite code for this group"
-        )
-      );
-    }
+    let totalOwe = 0; // Amount user owes others
+    let totalOwed = 0; // Amount others owe user
 
-    // Generate new invite code
-    group.inviteCode = generateInviteCode();
-    await group.save();
-    for (const member of group.members) {
-      if (member.user._id.toString() !== req.user._id.toString()) {
-        await notifyUser(member.user._id, {
-          type: "invite_code_generated",
-          message: `${req.user.name} generated a new invite code for the group.`,
-          meta: { groupId: group._id, inviteCode: group.inviteCode },
-        });
+    for (const group of groups) {
+      const expenses = await Expense.find({ group: group._id });
+      const settlements = await Settlement.find({ group: group._id });
+
+      const balances = {};
+      group.members.forEach((m) => {
+        balances[m.user.toString()] = 0;
+      });
+
+      // Expenses
+      for (const exp of expenses) {
+        balances[exp.paidBy.toString()] += exp.amount;
+        for (const split of exp.splits) {
+          balances[split.user.toString()] -= split.amount;
+        }
       }
+
+      // Settlements
+      for (const s of settlements) {
+        balances[s.from.toString()] -= s.amount;
+        balances[s.to.toString()] += s.amount;
+      }
+
+      const userBalance = balances[userId] || 0;
+      if (userBalance >= 0) totalOwed += userBalance;
+      else totalOwe += -userBalance;
     }
 
     return next(
-      successResponse(200, "Invite code generated successfully", {
+      successResponse(200, "User balances fetched successfully", {
+        totalOwe,
+        totalOwed,
+        netBalance: totalOwed - totalOwe,
+      })
+    );
+  } catch (err) {
+    return next(createError(500, err.message));
+  }
+};
+
+const generateGroupInvite = async (req, res, next) => {
+  try {
+    const groupId = req.params.id;
+    const group = await Group.findById(groupId);
+
+    if (!group) return next(createError(404, "Group not found"));
+    if (group.createdBy.toString() !== req.user._id.toString()) {
+      return next(createError(403, "Not authorized"));
+    }
+
+    // Always overwrite old code
+    group.inviteCode = generateInviteCode();
+    group.inviteCodeExpiresAt = new Date(Date.now() + 30 * 1000);
+
+    await group.save();
+
+    return next(
+      successResponse(200, "New invite code generated", {
         inviteCode: group.inviteCode,
+        expiresAt: group.inviteCodeExpiresAt,
       })
     );
   } catch (err) {
@@ -222,14 +328,13 @@ const generateGroupInvite = async (req, res, next) => {
 const joinGroupByInvite = async (req, res, next) => {
   try {
     const { inviteCode } = req.body;
-
-    if (!inviteCode) {
-      return next(createError(400, "Invite code is required"));
-    }
+    if (!inviteCode) return next(createError(400, "Invite code is required"));
 
     const group = await Group.findOne({ inviteCode });
-    if (!group) {
-      return next(createError(404, "Invalid or expired invite code"));
+    if (!group) return next(createError(404, "Invalid invite code"));
+
+    if (!group.inviteCodeExpiresAt || group.inviteCodeExpiresAt < new Date()) {
+      return next(createError(400, "Invite code has expired"));
     }
 
     const alreadyMember = group.members.some(
@@ -448,6 +553,9 @@ const leaveGroup = async (req, res, next) => {
 
 module.exports = {
   createGroup,
+  checkUserByEmail,
+  deleteGroupById,
+  getGroupDetiailById,
   updateGroup,
   getGroupBalances,
   generateGroupInvite,
@@ -455,5 +563,6 @@ module.exports = {
   getGroupExpenses,
   exportGroupExpensesCSV,
   leaveGroup,
-  getAllGroups
+  getUserTotalBalance,
+  getAllGroups,
 };

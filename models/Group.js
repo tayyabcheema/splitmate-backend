@@ -16,7 +16,15 @@ const groupSchema = new mongoose.Schema({
   inviteCode: {
     type: String,
     unique: true,
-    sparse: true, 
+    sparse: true,
+  },
+  inviteCodeExpiresAt: {
+    type: Date,
+    default: null,
+  },
+  order: {
+    type: Number,
+    default: 0,
   },
   members: [
     {

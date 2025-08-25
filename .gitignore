@@ -1,5 +1,14 @@
-# Node modules
-node_modules/
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+
+# Production
+/build
+/dist
 
 # Logs
 logs
@@ -15,37 +24,27 @@ pids
 *.seed
 *.pid.lock
 
-# dotenv environment variables
+# Environment files
 .env
-.env.*.local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# OS-specific files
+# OS / Editor junk
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
 
-# Editor-specific files
-.vscode/
-.idea/
-*.sw?
+# Cache
+.cache
+.npm
+.eslintcache
 
-# Build output
-dist/
-build/
-coverage/
-
-# Dependency directories for package managers
-.bun/
-.pnpm-store/
-.cache/
-.next/
-
-# Optional npm cache
-.npm/
-
-# Misc
-*.tgz
-*.bak
-*.old
-
-# Debugger configurations
-.nyc_output/
+# Optional: VSCode settings
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
